@@ -1,11 +1,13 @@
 import copy
-import xml
-import numpy
+import datetime
 import geopy.distance
 import iso8601
-import datetime
+import numpy
 import sys
+import xml
 import xml.etree.ElementTree as ET
+
+MT_TIMEZONE = datetime.timezone(datetime.timedelta(days=-1, seconds=61200))
 
 KML_NAMESPACE = "http://www.opengis.net/kml/2.2"
 
@@ -58,17 +60,16 @@ def calculate_speed(trkpt1, trkpt2):
   feet_delta = calculate_feet_delta(trkpt1, trkpt2)
   seconds_delta = (trkpt1.time - trkpt2.time).total_seconds()
   try:
-    return feet_delta / seconds_delta
+    return abs(feet_delta / seconds_delta)
   except ZeroDivisionError:
     return 0
 
 def map_with_look_behind(function, iterable):
+  iterable = iter(iterable)
   last_element = next(iterable)
-  yield last_element
   for i in iterable:
-    function(i, last_element)
+    yield function(i, last_element)
     last_element = i
-    yield last_element
 
 def grouper(predicate, iterable):
   """ Groups the elements in `iterable` into an iterable of iterables based on the `predicate` """
@@ -86,21 +87,48 @@ def grouper(predicate, iterable):
   yield cur_list
 
 
-def create_kml_tree(template_filepath, trkpt_iter_iter):
+def create_kml_tree(template_filepath, trkpt_list_list, upperbound_speed, lowerbound_speed):
   kml_tree = ET.parse(template_filepath)
   kml_folder = next(kml_tree.iter("{" + KML_NAMESPACE + "}Folder"))
   kml_placemark_template = next(kml_tree.iter("{" + KML_NAMESPACE + "}Placemark"))
   kml_folder.remove(kml_placemark_template)
-  for trkpt_iter in trkpt_iter_iter:
-    append_kml_coordinates(kml_folder, kml_placemark_template, trkpt_iter)
+  for trkpt_list in trkpt_list_list:
+    append_kml_coordinates(kml_folder, kml_placemark_template, trkpt_list, upperbound_speed, lowerbound_speed)
   kml_tree.write("new.kml", default_namespace=KML_NAMESPACE)
 
+def map_singular_to_color(singular, singular_max, singular_min):
+  max_color = 255
+  singular = min(max(singular, singular_min), singular_max)
+  red = int((1 - singular / singular_max) * max_color)
+  green = int((singular / singular_max) * max_color)
+  blue = 0
+  alpha = max_color
+  return (alpha, blue, green, red)
 
-def append_kml_coordinates(kml_folder, kml_placemark_template, trkpt_iter):
+
+def append_kml_coordinates(kml_folder, kml_placemark_template, trkpt_list,
+                           upperbound_speed, lowerbound_speed):
+
   kml_placemark = ET.fromstring(ET.tostring(kml_placemark_template))
 
   kml_coordinates = next(kml_placemark.iter("{" + KML_NAMESPACE + "}coordinates"))
-  kml_coordinates.text += "\n".join(map(lambda t: ",".join(map(str, [t.lon, t.lat, t.ele])), trkpt_iter))
+  kml_coordinates.text += "\n".join(map(lambda t: ",".join(map(str, [t.lon, t.lat, t.ele])), trkpt_list))
+
+  average_speed = calculate_speed(trkpt_list[0], trkpt_list[-1])
+  color = map_singular_to_color(average_speed, upperbound_speed, lowerbound_speed)
+  kml_color = next(kml_placemark.iter("{" + KML_NAMESPACE + "}color"))
+  kml_color.text = "".join(map(lambda c: hex(c).replace("0x", "").ljust(2, "0"), color))
+
+  kml_placemark_description = next(kml_placemark.iter("{" + KML_NAMESPACE + "}description"))
+  kml_placemark_description.text = " | ".join(
+    ("Average speed %.2fmph",
+    "Time Delta: %.1fmin",
+    "Start Time: %s")) % \
+    (round(average_speed / FEET_IN_MILE * 60 * 60, 2),
+    abs((trkpt_list[0].time - trkpt_list[-1].time).total_seconds() / 60),
+    str(trkpt_list[0].time.astimezone(MT_TIMEZONE)))
+  
+
 
   kml_folder.append(kml_placemark)
 
@@ -109,13 +137,17 @@ def main():
 
   xmltrkpt_iter = ET.parse(sys.stdin).getroot().iter(XML_NAMESPACE + "trkpt")
 
-  trkpt_iter = map(xmltrkpt_to_instance, xmltrkpt_iter)
+  trkpt_list = list(map(xmltrkpt_to_instance, xmltrkpt_iter))
 
-  trkpt_iter_iter = grouper(lambda trkpt, start_trkpt: calculate_feet_delta(trkpt, start_trkpt) > FEET_IN_MILE / 4, trkpt_iter)
+  trkpt_list_list = list(grouper(lambda trkpt, start_trkpt: calculate_feet_delta(trkpt, start_trkpt) > FEET_IN_MILE / 4, trkpt_list))
 
-  # print(list(map(lambda group: list(map(str, group)), trkpt_iter_iter)))
+  # print(list(map(lambda group: list(map(str, group)), trkpt_list_list)))
+  speed_list = list(map_with_look_behind(lambda t, last_t: calculate_speed(t, last_t), trkpt_list))
 
-  create_kml_tree("./template.kml", trkpt_iter_iter)
+  upperbound_speed = numpy.percentile(speed_list, 90)
+  lowerbound_speed = numpy.percentile(speed_list, 10)
+
+  create_kml_tree("./template.kml", trkpt_list_list, upperbound_speed, lowerbound_speed)
 
 
 if __name__ == "__main__":

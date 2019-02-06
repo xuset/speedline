@@ -4,7 +4,7 @@
     <name>Document Name</name>
     <description>Document Description</description>
     <Folder>
-      <open>1</open>
+      <open>0</open>
       <name>Folder Name</name>
       <Placemark>
         <Style>
@@ -13,7 +13,7 @@
             <width>2.0</width>
           </LineStyle>
         </Style>
-        <name>Placemark Name</name>
+        <name/>
         <description/>
         <LineString>
           <altitudeMode>clampToGround</altitudeMode>
