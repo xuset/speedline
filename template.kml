@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+  <Document>
+    <name>Document Name</name>
+    <description>Document Description</description>
+    <Folder>
+      <open>1</open>
+      <name>Folder Name</name>
+      <Placemark>
+        <Style>
+          <LineStyle>
+            <color>FFFFFFFF</color>
+            <width>2.0</width>
+          </LineStyle>
+        </Style>
+        <name>Placemark Name</name>
+        <description/>
+        <LineString>
+          <altitudeMode>clampToGround</altitudeMode>
+          <tessellate>1</tessellate>
+          <coordinates>
+          </coordinates>
+        </LineString>
+      </Placemark>
+    </Folder>
+  </Document>
+</kml>
