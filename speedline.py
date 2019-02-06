@@ -2,6 +2,7 @@ import copy
 import datetime
 import geopy.distance
 import iso8601
+import math
 import numpy
 import sys
 import xml
@@ -14,6 +15,8 @@ KML_NAMESPACE = "http://www.opengis.net/kml/2.2"
 XML_NAMESPACE = "{http://www.topografix.com/GPX/1/1}"
 
 FEET_IN_MILE = 5280
+
+FEET_IN_METERS = 3.28084
 
 ET.register_namespace("", KML_NAMESPACE)
 ET.register_namespace("", XML_NAMESPACE)
@@ -54,7 +57,9 @@ def condensed_trkpt_iter(trkpt_iter, max_feet):
 def calculate_feet_delta(trkpt1, trkpt2):
   coords1 = (trkpt1.lat, trkpt1.lon)
   coords2 = (trkpt2.lat, trkpt2.lon)
-  return geopy.distance.distance(coords1, coords2).feet
+  horizontal_delta = geopy.distance.distance(coords1, coords2).feet
+  vertical_delta = (trkpt1.ele - trkpt2.ele) * FEET_IN_METERS
+  return math.sqrt(horizontal_delta ** 2 + vertical_delta ** 2)
 
 def calculate_speed(trkpt1, trkpt2):
   feet_delta = calculate_feet_delta(trkpt1, trkpt2)
