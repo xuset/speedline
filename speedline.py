@@ -21,12 +21,6 @@ FEET_IN_METERS = 3.28084
 ET.register_namespace("", KML_NAMESPACE)
 ET.register_namespace("", XML_NAMESPACE)
 
-class Trkseg(object):
-  def __init__(self, trkpt_list):
-    self.trkpt_list = trkpt_list
-
-  def __str__(self):
-    return str(self.__dict__)
 
 class Trkpt(object):
   def __init__(self, lat, lon, ele, time):
@@ -38,6 +32,7 @@ class Trkpt(object):
   def __str__(self):
     return str(self.__dict__)
 
+
 def xmltrkpt_to_instance(xmltrkpt):
   return Trkpt(
     float(xmltrkpt.get("lat")),
@@ -46,13 +41,6 @@ def xmltrkpt_to_instance(xmltrkpt):
     iso8601.parse_date(xmltrkpt.find(XML_NAMESPACE + "time").text.strip())
   )
 
-def condensed_trkpt_iter(trkpt_iter, max_feet):
-  last_trkpt = next(trkpt_iter)
-  yield last_trkpt
-  for trkpt in trkpt_iter:
-    if calculate_feet_delta(trkpt, last_trkpt) > max_feet:
-      yield last_trkpt
-      last_trkpt = trkpt
 
 def calculate_feet_delta(trkpt1, trkpt2):
   coords1 = (trkpt1.lat, trkpt1.lon)
@@ -60,6 +48,7 @@ def calculate_feet_delta(trkpt1, trkpt2):
   horizontal_delta = geopy.distance.distance(coords1, coords2).feet
   vertical_delta = (trkpt1.ele - trkpt2.ele) * FEET_IN_METERS
   return math.sqrt(horizontal_delta ** 2 + vertical_delta ** 2)
+
 
 def calculate_speed(trkpt1, trkpt2):
   feet_delta = calculate_feet_delta(trkpt1, trkpt2)
@@ -69,12 +58,14 @@ def calculate_speed(trkpt1, trkpt2):
   except ZeroDivisionError:
     return 0
 
+
 def map_with_look_behind(function, iterable):
   iterable = iter(iterable)
   last_element = next(iterable)
   for i in iterable:
     yield function(i, last_element)
     last_element = i
+
 
 def grouper(predicate, iterable):
   """ Groups the elements in `iterable` into an iterable of iterables based on the `predicate` """
@@ -92,20 +83,11 @@ def grouper(predicate, iterable):
   yield cur_list
 
 
-def create_kml_tree(template_filepath, trkpt_list_list, upperbound_speed, lowerbound_speed):
-  kml_tree = ET.parse(template_filepath)
-  kml_folder = next(kml_tree.iter("{" + KML_NAMESPACE + "}Folder"))
-  kml_placemark_template = next(kml_tree.iter("{" + KML_NAMESPACE + "}Placemark"))
-  kml_folder.remove(kml_placemark_template)
-  for trkpt_list in trkpt_list_list:
-    append_kml_coordinates(kml_folder, kml_placemark_template, trkpt_list, upperbound_speed, lowerbound_speed)
-  kml_tree.write("new.kml", default_namespace=KML_NAMESPACE)
-
-def map_singular_to_color(singular, singular_max, singular_min):
+def map_scalar_to_color(scalar, scalar_max, scalar_min):
   max_color = 255
-  singular = min(max(singular, singular_min), singular_max)
-  red = int((1 - singular / singular_max) * max_color)
-  green = int((singular / singular_max) * max_color)
+  scalar = min(max(scalar, scalar_min), scalar_max)
+  red = int((1 - scalar / scalar_max) * max_color)
+  green = int((scalar / scalar_max) * max_color)
   blue = 0
   alpha = max_color
   return (alpha, blue, green, red)
@@ -120,7 +102,7 @@ def append_kml_coordinates(kml_folder, kml_placemark_template, trkpt_list,
   kml_coordinates.text += "\n".join(map(lambda t: ",".join(map(str, [t.lon, t.lat, t.ele])), trkpt_list))
 
   average_speed = calculate_speed(trkpt_list[0], trkpt_list[-1])
-  color = map_singular_to_color(average_speed, upperbound_speed, lowerbound_speed)
+  color = map_scalar_to_color(average_speed, upperbound_speed, lowerbound_speed)
   kml_color = next(kml_placemark.iter("{" + KML_NAMESPACE + "}color"))
   kml_color.text = "".join(map(lambda c: hex(c).replace("0x", "").ljust(2, "0"), color))
 
@@ -132,14 +114,21 @@ def append_kml_coordinates(kml_folder, kml_placemark_template, trkpt_list,
     (round(average_speed / FEET_IN_MILE * 60 * 60, 2),
     abs((trkpt_list[0].time - trkpt_list[-1].time).total_seconds() / 60),
     str(trkpt_list[0].time.astimezone(MT_TIMEZONE)))
-  
-
 
   kml_folder.append(kml_placemark)
 
 
-def main():
+def create_kml_tree(template_filepath, trkpt_list_list, upperbound_speed, lowerbound_speed):
+  kml_tree = ET.parse(template_filepath)
+  kml_folder = next(kml_tree.iter("{" + KML_NAMESPACE + "}Folder"))
+  kml_placemark_template = next(kml_tree.iter("{" + KML_NAMESPACE + "}Placemark"))
+  kml_folder.remove(kml_placemark_template)
+  for trkpt_list in trkpt_list_list:
+    append_kml_coordinates(kml_folder, kml_placemark_template, trkpt_list, upperbound_speed, lowerbound_speed)
+  kml_tree.write("new.kml", default_namespace=KML_NAMESPACE)
 
+
+def main():
   xmltrkpt_iter = ET.parse(sys.stdin).getroot().iter(XML_NAMESPACE + "trkpt")
 
   trkpt_list = list(map(xmltrkpt_to_instance, xmltrkpt_iter))
