@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 import copy
 import datetime
 import geopy.distance
@@ -125,7 +127,7 @@ def create_kml_tree(template_filepath, trkpt_list_list, upperbound_speed, lowerb
   kml_folder.remove(kml_placemark_template)
   for trkpt_list in trkpt_list_list:
     append_kml_coordinates(kml_folder, kml_placemark_template, trkpt_list, upperbound_speed, lowerbound_speed)
-  kml_tree.write("new.kml", default_namespace=KML_NAMESPACE)
+  kml_tree.write(sys.stdout, encoding="unicode", default_namespace=KML_NAMESPACE)
 
 
 def main():
@@ -135,7 +137,6 @@ def main():
 
   trkpt_list_list = list(grouper(lambda trkpt, start_trkpt: calculate_feet_delta(trkpt, start_trkpt) > FEET_IN_MILE / 4, trkpt_list))
 
-  # print(list(map(lambda group: list(map(str, group)), trkpt_list_list)))
   speed_list = list(map_with_look_behind(lambda t, last_t: calculate_speed(t, last_t), trkpt_list))
 
   upperbound_speed = numpy.percentile(speed_list, 90)
